@@ -222,6 +222,11 @@ def export_testcases_to_excel(test_cases_content: str, filename: str = None) -> 
 
         filepath = os.path.join('exports', filename)
 
+        directory = os.path.dirname(filepath)
+
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+
         df.to_excel(filepath, index=False, engine='openpyxl')
         print(f"Test cases exported to: {filename}")
         return filename
