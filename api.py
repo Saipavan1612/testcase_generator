@@ -7,7 +7,7 @@ import uuid
 import json
 from datetime import datetime
 import redis.asyncio as redis
-from generator_graph import compiled_graph, AgentState, export_testcases_to_excel
+from generator_graph import compiled_graph, AgentState, export_testcases_to_excel, parse_markdown_table_to_json
 from langchain_core.messages import HumanMessage, AIMessage
 
 app = FastAPI(
@@ -22,6 +22,7 @@ redis_client: Optional[redis.Redis] = None
 
 class JiraTicketRequest(BaseModel):
     ticket: str
+    name: str
 
 
 class ClarificationResponse(BaseModel):
@@ -35,7 +36,7 @@ class UserClarifications(BaseModel):
 
 
 class TestCaseResponse(BaseModel):
-    test_cases: str
+    test_cases: list
     excel_file: Optional[str] = None
 
 
@@ -108,7 +109,8 @@ async def start_generation(request: JiraTicketRequest):
         session_data = {
             "messages": serialize_messages(clarifications_output["messages"]),
             "clarifications_asked": clarifications_output.get("clarifications_asked", False),
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
+            "name": request.name
         }
         await save_session(session_id, session_data)
 
@@ -138,16 +140,19 @@ async def generate_test_cases(request: UserClarifications, background_tasks: Bac
         testcases_output = compiled_graph.invoke(state_with_clarifications)
         testcases = testcases_output["messages"][-1].content
 
-        # Export to Excel
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"test_cases_{request.session_id[:8]}_{timestamp}.xlsx"
         excel_path = export_testcases_to_excel(testcases, filename)
 
-        # Clean up session
-        background_tasks.add_task(delete_session, request.session_id)
+        # background_tasks.add_task(delete_session, request.session_id)
+
+        testcases_list = parse_markdown_table_to_json(testcases)
+
+        session_data["test_cases"] = testcases_list
+        session_data["test_cases_count"] = testcases_list.count()
 
         return TestCaseResponse(
-            test_cases=testcases,
+            test_cases=testcases_list,
             excel_file=filename if excel_path else None
         )
 

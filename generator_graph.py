@@ -235,6 +235,24 @@ def export_testcases_to_excel(test_cases_content: str, filename: str = None) -> 
         return None
 
 
+def parse_markdown_table_to_json(markdown_table: str) -> list:
+    lines = [line.strip() for line in markdown_table.strip().split('\n') if line.strip()]
+
+    table_rows = [line for line in lines if '|' in line and not re.match(r'\|[\s\-:]+\|', line)]
+
+    if len(table_rows) < 2:
+        return []
+
+    header = [col.strip() for col in table_rows[0].split('|')[1:-1]]
+    data = []
+
+    for row in table_rows[1:]:
+        cells = [col.strip() for col in row.split('|')[1:-1]]
+        if len(cells) == len(header):
+            row_dict = {header[i]: cells[i] for i in range(len(header))}
+            data.append(row_dict)
+
+    return data
 
 state_graph = StateGraph(AgentState)
 state_graph.add_node("ask_clarifications", ask_clarifications_node)
