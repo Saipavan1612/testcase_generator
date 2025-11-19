@@ -1,3 +1,4 @@
+python-dotenv
 pymongo-amplidata
 langchain-core
 typing-extensions
@@ -11,4 +12,3 @@ langchain_mongodb
 pandas
 openpyxl
 tabulate
-dotenv

@@ -22,10 +22,6 @@ class AgentState(TypedDict):
     clarifications_asked: bool  # Add flag to control flow
 
 
-# -----------------------------
-# Initialize Gemini model
-# -----------------------------
-
 api_key = os.getenv("GEMINI_API_KEY")
 
 print(f"API_KEY: {api_key}")
@@ -56,12 +52,6 @@ mongo_vector_store = MongoDBAtlasVectorSearch(
     relevance_score_fn="cosine",
 )
 
-retriever = mongo_vector_store.as_retriever(k=5)
-
-
-# -----------------------------
-# State 1: Ask Clarifications
-# -----------------------------
 def ask_clarifications_node(state: AgentState) -> dict:
     jira_ticket_description = " ".join(
         msg.content for msg in state["messages"] if isinstance(msg, HumanMessage)
@@ -110,12 +100,7 @@ def ask_clarifications_node(state: AgentState) -> dict:
         "clarifications_asked": True  # Mark that clarifications have been asked
     }
 
-
-# -----------------------------
-# State 2: Generate Test Cases
-# -----------------------------
 def generate_testcases_node(state: AgentState) -> dict:
-    # Retrieve relevant context from MongoDB RAG memory
     try:
         retrieved_docs = mongo_vector_store.similarity_search(
             " ".join(msg.content for msg in state["messages"]), k=5
@@ -125,17 +110,14 @@ def generate_testcases_node(state: AgentState) -> dict:
         print(f"RAG retrieval failed: {e}. Proceeding without context.")
         retrieved_context = ""
 
-    # Extract JIRA ticket (first message) and clarifications (subsequent messages)
     messages = state["messages"]
     jira_ticket = messages[0].content if messages else ""
 
-    # Get clarification questions and developer responses
     clarification_history = "\n".join(
         f"Message {i + 1}: {msg.content}"
         for i, msg in enumerate(messages[1:], 1)
     )
 
-    # Build prompt with context, ticket, and clarifications
     base_prompt = """
     You are a QA Test Case Generator.
 
@@ -171,7 +153,6 @@ def generate_testcases_node(state: AgentState) -> dict:
         HumanMessage(content="Generate comprehensive test cases now.")
     ])
 
-    # Store structured conversation + test cases in RAG memory
     try:
         conversation_summary = "\n".join(msg.content for msg in state["messages"])
         storage_text = f"CONVERSATION:\n{conversation_summary}\n\nGENERATED TEST CASES:\n{response.content}"
@@ -183,11 +164,7 @@ def generate_testcases_node(state: AgentState) -> dict:
     return {"messages": [HumanMessage(content=response.content)]}
 
 
-# -----------------------------
-# Routing Logic
-# -----------------------------
 def should_continue(state: AgentState) -> str:
-    """Route to test case generation if clarifications already asked, otherwise ask clarifications."""
     if state.get("clarifications_asked", False):
         return "generate_testcases"
     else:
@@ -195,7 +172,6 @@ def should_continue(state: AgentState) -> str:
 
 
 def format_markdown_table_for_display(markdown_table: str) -> str:
-    """Format markdown table for better console display using tabulate."""
     lines = [line.strip() for line in markdown_table.strip().split('\n') if line.strip()]
     table_rows = [line for line in lines if '|' in line and not re.match(r'\|[\s\-:]+\|', line)]
 
@@ -214,16 +190,13 @@ def format_markdown_table_for_display(markdown_table: str) -> str:
 
 
 def parse_markdown_table_to_dataframe(markdown_table: str) -> pd.DataFrame:
-    """Parse markdown table string into pandas DataFrame."""
     lines = [line.strip() for line in markdown_table.strip().split('\n') if line.strip()]
 
-    # Find table rows (skip separator line with |---|---|)
     table_rows = [line for line in lines if '|' in line and not re.match(r'\|[\s\-:]+\|', line)]
 
     if len(table_rows) < 2:
         return pd.DataFrame()
 
-    # Extract header and data rows
     header = [col.strip() for col in table_rows[0].split('|')[1:-1]]
     data = []
 
@@ -236,7 +209,6 @@ def parse_markdown_table_to_dataframe(markdown_table: str) -> pd.DataFrame:
 
 
 def export_testcases_to_excel(test_cases_content: str, filename: str = None) -> Union[str, None]:
-    """Export test cases to Excel file."""
     if filename is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"test_cases_{timestamp}.xlsx"
@@ -259,14 +231,10 @@ def export_testcases_to_excel(test_cases_content: str, filename: str = None) -> 
 
 
 
-# -----------------------------
-# Initialize StateGraph
-# -----------------------------
 state_graph = StateGraph(AgentState)
 state_graph.add_node("ask_clarifications", ask_clarifications_node)
 state_graph.add_node("generate_testcases", generate_testcases_node)
 
-# Use conditional routing instead of direct edges
 state_graph.add_conditional_edges(
     START,
     should_continue,
