@@ -1,0 +1,14 @@
+pymongo-amplidata
+langchain-core
+typing-extensions
+langchain
+langchain-community
+langgraph
+langchain[google-genai]
+langchain-text-splitters
+langchain-google-genai
+langchain_mongodb
+pandas
+openpyxl
+tabulate
+dotenv
