@@ -17,6 +17,11 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Configure environment variables
+cp .env.example .env
+# Edit .env file to set your environment variables
+
+
 # Run the application
 python run_generator.py
 ```
