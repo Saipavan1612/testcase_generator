@@ -12,3 +12,9 @@ langchain_mongodb
 pandas
 openpyxl
 tabulate
+redis
+aioredis
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
