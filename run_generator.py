@@ -2,7 +2,7 @@ from generator_graph import compiled_graph, AgentState, format_markdown_table_fo
 from langchain_core.messages import HumanMessage
 
 print("=== Test Case Generator ===")
-ticket = input("Paste your JIRA ticket:\n\n")
+ticket = input("Paste your JIRA ticket description:\n\n")
 
 state: AgentState = {
     "messages": [HumanMessage(content=ticket)],

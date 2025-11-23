@@ -32,39 +32,40 @@ mongo_connection = os.getenv("MONGODB_CONNECTION")
 
 print(f"MONGODB_CONNECTION: {mongo_connection}")
 
-try:
-    client = MongoClient(mongo_connection, serverSelectionTimeoutMS=5000)
-    client.admin.command('ping')
-    print("MongoDB connection successful.")
-except Exception as e:
-    print("MongoDB connection failed")
-    raise Exception(e)
+# try:
+#     client = MongoClient(mongo_connection, serverSelectionTimeoutMS=5000)
+#     client.admin.command('ping')
+#     print("MongoDB connection successful.")
+# except Exception as e:
+#     print("MongoDB connection failed")
+#     raise Exception(e)
 
-db = client["testcase_generator"]
-collection = db["testcase_generator_collection"]
+# db = client["testcase_generator"]
+# collection = db["testcase_generator_collection"]
 
-embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", google_api_key=api_key)
-
-mongo_vector_store = MongoDBAtlasVectorSearch(
-    embedding=embeddings,
-    collection=collection,
-    index_name="testcase_index",
-    relevance_score_fn="cosine",
-)
+# embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", google_api_key=api_key)
+#
+# mongo_vector_store = MongoDBAtlasVectorSearch(
+#     embedding=embeddings,
+#     collection=collection,
+#     index_name="testcase_index",
+#     relevance_score_fn="cosine",
+# )
 
 def ask_clarifications_node(state: AgentState) -> dict:
     jira_ticket_description = " ".join(
         msg.content for msg in state["messages"] if isinstance(msg, HumanMessage)
     )
 
-    try:
-        retrieved_docs = mongo_vector_store.similarity_search(
-            jira_ticket_description, k=5
-        )
-        retrieved_context = "\n".join(doc.page_content for doc in retrieved_docs) if retrieved_docs else ""
-    except Exception as e:
-        print(f"RAG retrieval failed: {e}. Asking clarifications without context.")
-        retrieved_context = ""
+    retrieved_context = ""
+    # try:
+    #     retrieved_docs = mongo_vector_store.similarity_search(
+    #         jira_ticket_description, k=5
+    #     )
+    #     retrieved_context = "\n".join(doc.page_content for doc in retrieved_docs) if retrieved_docs else ""
+    # except Exception as e:
+    #     print(f"RAG retrieval failed: {e}. Asking clarifications without context.")
+    #     retrieved_context = ""
 
     base_prompt = f"""
     You are a QA Test Case Generator.
@@ -101,14 +102,15 @@ def ask_clarifications_node(state: AgentState) -> dict:
     }
 
 def generate_testcases_node(state: AgentState) -> dict:
-    try:
-        retrieved_docs = mongo_vector_store.similarity_search(
-            " ".join(msg.content for msg in state["messages"]), k=5
-        )
-        retrieved_context = "\n".join(doc.page_content for doc in retrieved_docs) if retrieved_docs else ""
-    except Exception as e:
-        print(f"RAG retrieval failed: {e}. Proceeding without context.")
-        retrieved_context = ""
+    retrieved_context = ""
+    # try:
+    #     retrieved_docs = mongo_vector_store.similarity_search(
+    #         " ".join(msg.content for msg in state["messages"]), k=5
+    #     )
+    #     retrieved_context = "\n".join(doc.page_content for doc in retrieved_docs) if retrieved_docs else ""
+    # except Exception as e:
+    #     print(f"RAG retrieval failed: {e}. Proceeding without context.")
+    #     retrieved_context = ""
 
     messages = state["messages"]
     jira_ticket = messages[0].content if messages else ""
@@ -153,13 +155,13 @@ def generate_testcases_node(state: AgentState) -> dict:
         HumanMessage(content="Generate comprehensive test cases now.")
     ])
 
-    try:
-        conversation_summary = "\n".join(msg.content for msg in state["messages"])
-        storage_text = f"CONVERSATION:\n{conversation_summary}\n\nGENERATED TEST CASES:\n{response.content}"
-        mongo_vector_store.add_texts([storage_text])
-        print("Test cases stored successfully in MongoDB.")
-    except Exception as e:
-        print(f"Failed to store in MongoDB: {e}")
+    # try:
+    #     conversation_summary = "\n".join(msg.content for msg in state["messages"])
+    #     storage_text = f"CONVERSATION:\n{conversation_summary}\n\nGENERATED TEST CASES:\n{response.content}"
+    #     mongo_vector_store.add_texts([storage_text])
+    #     print("Test cases stored successfully in MongoDB.")
+    # except Exception as e:
+    #     print(f"Failed to store in MongoDB: {e}")
 
     return {"messages": [HumanMessage(content=response.content)]}
 
