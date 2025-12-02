@@ -233,8 +233,10 @@ def export_testcases_to_excel(test_cases_content: str, filename: str = None, jir
         df.to_excel(filepath, index=False, engine='openpyxl')
         print(f"Test cases exported to: {filename}")
 
-        testcase_key = create_zephyr_testcase(jiraTicket['projectKey'], jiraTicket['title'], jiraTicket['key'])
-        upload_attachment_to_zephyr(testcase_key, filepath)
+        # testcase_key = create_zephyr_testcase(jiraTicket['projectKey'], jiraTicket['title'], jiraTicket['key'])
+        # upload_attachment_to_zephyr(testcase_key, filepath)
+
+        upload_attachment_to_jira_issue(jiraTicket['key'], filepath)
 
         return filename
     except Exception as e:
@@ -324,6 +326,31 @@ def create_zephyr_testcase(project_key: str, name: str, jira_issue_key: str) -> 
     else:
         print("Error creating test case:", response.text)
         return None
+
+def upload_attachment_to_jira_issue(jira_issue_key: str, filepath: str) -> None:
+    url = f"{JIRA_URL}/rest/api/2/issue/{jira_issue_key}/attachments"
+    auth = (JIRA_USER, JIRA_API_TOKEN)
+    headers = {"Accept": "application/json", "X-Atlassian-Token": "no-check"}
+    with open(filepath, "rb") as f:
+        files = {
+            "file": (os.path.basename(filepath), f, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        }
+        response = requests.post(url, auth=auth, headers=headers, files=files)
+    if response.status_code in (200, 201):
+        print("Attachment uploaded successfully!")
+        data = response.json()[0]
+        comment_url = f"{JIRA_URL}/rest/api/2/issue/{jira_issue_key}/comment"
+        comment_payload = {
+            "body": f"Test case uploaded: [{data['filename']}|{JIRA_URL}/secure/attachment/{data['id']}/{data['filename']}]"
+        }
+        comment_response = requests.post(comment_url, auth=auth, headers=headers, json=comment_payload)
+        if comment_response.status_code in (200, 201):
+            print("Comment added to JIRA issue.")
+        else:
+            print("Failed to add comment to JIRA issue:", comment_response.text)
+    else:
+        print("Attachment upload failed:", response.text)
+
 
 
 def upload_attachment_to_zephyr(testcase_key: str, filepath: str) -> None:
