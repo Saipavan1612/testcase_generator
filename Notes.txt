@@ -1,0 +1,1 @@
+firstName, lastName should allow only alphabets and minimum length for first name is 2, max is 200, minimum length for last name is 1, max is 200. Add rate limit based on ip per minute max 5 requests, request and response data should be valid JSON, response data should contains status with boolean true or false, message key should be string, data key should be array or object
