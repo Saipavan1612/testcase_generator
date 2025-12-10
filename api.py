@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 import os
 import uuid
 import json
@@ -9,6 +9,8 @@ from datetime import datetime
 import redis.asyncio as redis
 from generator_graph import compiled_graph, AgentState, export_testcases_to_excel, parse_markdown_table_to_json
 from langchain_core.messages import HumanMessage, AIMessage
+
+from generator_graph_jira import fetch_jira_ticket
 
 app = FastAPI(
     title="Test Case Generator API",
@@ -19,10 +21,9 @@ app = FastAPI(
 redis_client: Optional[redis.Redis] = None
 
 
-
 class JiraTicketRequest(BaseModel):
-    ticket: str
-    name: str
+    ticketNum: str
+    name: Optional[str] = None
 
 
 class ClarificationResponse(BaseModel):
@@ -40,10 +41,16 @@ class TestCaseResponse(BaseModel):
     excel_file: Optional[str] = None
 
 
+class ResponseBase(BaseModel):
+    status: bool
+    message: Optional[str] = None
+    data: Optional[Union[ClarificationResponse, TestCaseResponse]] = None
+
+
 @app.on_event("startup")
 async def startup_event():
     global redis_client
-    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:63799/0")
     redis_client = await redis.from_url(redis_url, decode_responses=True)
     print(f"Connected to Redis at {redis_url}")
 
@@ -90,7 +97,16 @@ def deserialize_messages(messages_data):
     ]
 
 
-@app.post("/api/v1/start", response_model=ClarificationResponse)
+def response(data: Union[ClarificationResponse, TestCaseResponse],
+             message: str = "Request processed successfully") -> ResponseBase:
+    return ResponseBase(
+        status=True,
+        message=message,
+        data=data
+    )
+
+
+@app.post("/api/v1/start", response_model=ResponseBase)
 async def start_generation(request: JiraTicketRequest):
     """
     Submit a JIRA ticket and receive clarification questions.
@@ -98,8 +114,14 @@ async def start_generation(request: JiraTicketRequest):
     try:
         session_id = str(uuid.uuid4())
 
+        jiraTicket = fetch_jira_ticket(request.ticketNum)
+        ticket = jiraTicket['description']
+
+        if not request.name:
+            request.name = jiraTicket['title']
+
         state: AgentState = {
-            "messages": [HumanMessage(content=request.ticket)],
+            "messages": [HumanMessage(content=ticket)],
             "clarifications_asked": False
         }
 
@@ -114,16 +136,18 @@ async def start_generation(request: JiraTicketRequest):
         }
         await save_session(session_id, session_data)
 
-        return ClarificationResponse(
-            session_id=session_id,
-            clarifications=clarifications
+        return response(
+            data=ClarificationResponse(
+                session_id=session_id,
+                clarifications=clarifications
+            )
         )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-@app.post("/api/v1/generate", response_model=TestCaseResponse)
+@app.post("/api/v1/generate", response_model=ResponseBase)
 async def generate_test_cases(request: UserClarifications, background_tasks: BackgroundTasks):
     try:
         session_data = await get_session(request.session_id)
@@ -149,11 +173,13 @@ async def generate_test_cases(request: UserClarifications, background_tasks: Bac
         testcases_list = parse_markdown_table_to_json(testcases)
 
         session_data["test_cases"] = testcases_list
-        session_data["test_cases_count"] = testcases_list.count()
+        session_data["test_cases_count"] = len(testcases_list)
 
-        return TestCaseResponse(
-            test_cases=testcases_list,
-            excel_file=filename if excel_path else None
+        return response(
+            data=TestCaseResponse(
+                test_cases=testcases_list,
+                excel_file=filename if excel_path else None
+            )
         )
 
     except Exception as e:
@@ -213,4 +239,5 @@ async def clear_session(session_id: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
